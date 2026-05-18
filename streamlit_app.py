@@ -1,5 +1,6 @@
 """
-Schaakopening Essenties — Interactief FP&A Dashboard
+Schaakopening Essenties — FP&A Dashboard
+Structuur identiek aan het Excel dashboard.
 """
 import streamlit as st
 import pandas as pd
@@ -20,6 +21,20 @@ WSDL      = "https://soap.e-boekhouden.nl/soap.asmx?wsdl"
 DATUM_VAN = date(2024, 1, 1)
 DATUM_TOT = date(2026, 12, 31)
 
+OMZET_RK      = [8000, 8010, 8020]
+COS_RK        = [7000]
+MARKETING_RK  = [4510, 4520, 4540, 4590, 4794]
+AFSCHR_RK     = [4335, 4340]
+ONTWIKKEL_RK  = [4755]
+REIS_RK       = [4530, 4600]
+KANTOOR_RK    = [4500, 4550, 4555, 4560, 4700, 4720, 4740, 4750, 4760, 4790, 4810]
+OVERIG_RK     = [4850, 4860, 4900, 4950]
+FINANCIEEL_RK = [9000]
+OPEX_C        = MARKETING_RK + KANTOOR_RK + ONTWIKKEL_RK + REIS_RK + AFSCHR_RK + OVERIG_RK
+EBIT_C        = OMZET_RK + COS_RK + OPEX_C
+NETTO_C       = EBIT_C + FINANCIEEL_RK
+PL_CODES      = OMZET_RK + COS_RK + OPEX_C + FINANCIEEL_RK
+
 REKENING_NAMEN = {
     8000:"Omzet premium", 8010:"Omzet losse producten", 8020:"Omzet hostingbijdragen",
     7000:"Inkopen", 4335:"Afschr. Inventarissen", 4340:"Afschr. Hardware",
@@ -37,69 +52,55 @@ REKENING_NAMEN = {
     9000:"Rente spaarrekening",
 }
 
-OMZET_RK      = [8000, 8010, 8020]
-COS_RK        = [7000]
-MARKETING_RK  = [4510, 4520, 4540, 4590, 4794]
-AFSCHR_RK     = [4335, 4340]
-ONTWIKKEL_RK  = [4755]
-REIS_RK       = [4530, 4600]
-KANTOOR_RK    = [4500, 4550, 4555, 4560, 4700, 4720, 4740, 4750, 4760, 4790, 4810]
-OVERIG_RK     = [4850, 4860, 4900, 4950]
-FINANCIEEL_RK = [9000]
-PL_CODES      = (OMZET_RK + COS_RK + MARKETING_RK + AFSCHR_RK + ONTWIKKEL_RK
-                 + REIS_RK + KANTOOR_RK + OVERIG_RK + FINANCIEEL_RK)
-OPEX_C        = MARKETING_RK + KANTOOR_RK + ONTWIKKEL_RK + REIS_RK + AFSCHR_RK + OVERIG_RK
-EBIT_C        = OMZET_RK + COS_RK + OPEX_C
-NETTO_C       = EBIT_C + FINANCIEEL_RK
-MAANDEN_NL    = ["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"]
+MND = ["Jan","Feb","Mrt","Apr","Mei","Jun","Jul","Aug","Sep","Okt","Nov","Dec"]
 
 # ─── CSS ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] { background:#F0F2F6; }
-[data-testid="stSidebar"]          { background:#1F3864 !important; }
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span,
-[data-testid="stSidebar"] div  { color:#FFFFFF !important; }
+[data-testid="stSidebar"] { background:#1F3864 !important; }
+[data-testid="stSidebar"] label,[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,[data-testid="stSidebar"] div,
+[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color:#FFFFFF !important; }
 [data-testid="stSidebar"] .stButton>button {
-    background:#2E75B6; color:white; border:none;
-    width:100%; border-radius:6px; padding:8px;
+    background:#2E75B6; color:white !important; border:none;
+    width:100%; border-radius:6px; font-weight:600;
 }
-.kpi {
-    background:white; border-radius:10px; padding:20px 22px 16px;
-    box-shadow:0 2px 8px rgba(0,0,0,.09); height:110px;
-}
-.kpi-label { font-size:10px; color:#999; text-transform:uppercase;
-             letter-spacing:1px; font-weight:700; }
-.kpi-value { font-size:28px; font-weight:800; line-height:1.15; margin:4px 0 6px; }
-.kpi-sub   { font-size:11px; font-weight:600; }
-.grow-pos  { color:#375623; }
-.grow-neg  { color:#C00000; }
-.pl-table  { width:100%; border-collapse:collapse; font-family:Arial,sans-serif;
-             font-size:13px; margin-top:4px; }
-.pl-table th { background:#1F3864; color:white; padding:9px 14px;
-               text-align:right; font-weight:700; font-size:11px;
-               letter-spacing:.5px; text-transform:uppercase; }
-.pl-table th:first-child { text-align:left; }
-.pl-table td { padding:7px 14px; border-bottom:1px solid #EEF0F3; }
-.pl-table tr:hover td { background:#F7F9FC; }
-.pl-sec  { background:#2E75B6 !important; color:white !important;
-           font-weight:700; font-size:12px; letter-spacing:.4px; }
-.pl-sec td { color:white !important; border-bottom:none !important; }
-.pl-sub  { background:#EEF3FA !important; font-weight:700; }
-.pl-tot  { background:#1F3864 !important; }
-.pl-tot td { color:white !important; font-weight:800;
-             font-size:14px; border-bottom:none !important; }
-.pl-neg  { color:#C00000 !important; }
-.pl-ind  { padding-left:28px !important; color:#444; }
+.kpi { background:white; border-radius:10px; padding:18px 20px 14px;
+       box-shadow:0 2px 8px rgba(0,0,0,.10); }
+.kpi-lbl { font-size:10px; color:#999; text-transform:uppercase;
+           letter-spacing:1px; font-weight:700; margin-bottom:6px; }
+.kpi-val { font-size:30px; font-weight:800; line-height:1.1; }
+.kpi-sub { font-size:11px; font-weight:600; margin-top:6px; min-height:14px; }
+.grow-p { color:#375623; } .grow-n { color:#C00000; }
+
+.pl-wrap { background:white; border-radius:10px; padding:18px 20px;
+           box-shadow:0 2px 8px rgba(0,0,0,.10); overflow-x:auto; }
+table.pl { width:100%; border-collapse:collapse; font-family:Arial,sans-serif;
+           font-size:12px; white-space:nowrap; }
+table.pl th { background:#1F3864; color:white; padding:8px 10px;
+              text-align:right; font-size:10px; letter-spacing:.5px;
+              text-transform:uppercase; border:1px solid #2E75B6; }
+table.pl th.lbl { text-align:left; min-width:180px; }
+table.pl td { padding:6px 10px; border-bottom:1px solid #EEF0F3; text-align:right; }
+table.pl td.lbl { text-align:left; }
+table.pl td.ind { text-align:left; padding-left:22px; color:#555; }
+.sec td { background:#2E75B6 !important; color:white !important;
+          font-weight:700; font-size:11px; letter-spacing:.4px;
+          border-bottom:none !important; padding:7px 10px; }
+.sub td { background:#EEF3FA !important; font-weight:700; }
+.tot td { background:#1F3864 !important; color:white !important;
+          font-weight:800; font-size:13px; border-bottom:none !important; }
+.neg { color:#C00000 !important; }
+.tot .neg { color:#FFB3B3 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─── DATA ────────────────────────────────────────────────────────────────────
-def _zget(obj, key, default=None):
-    try:    return obj[key]
-    except: return default
+def _zget(obj, key):
+    try: return obj[key]
+    except: return None
 
 @st.cache_data(ttl=3600, show_spinner="Data ophalen uit e-Boekhouden…")
 def load_data():
@@ -120,19 +121,18 @@ def load_data():
                 SessionID=sid,
                 SecurityCode2=st.secrets["SECURITY_CODE_2"],
                 cFilter={
-                    "MutatieNr": ZeepSkip, "MutatieNrVan": nr_van if nr_van > 0 else ZeepSkip,
+                    "MutatieNr": ZeepSkip,
+                    "MutatieNrVan": nr_van if nr_van > 0 else ZeepSkip,
                     "MutatieNrTm": ZeepSkip, "Factuurnummer": ZeepSkip,
                     "DatumVan": datetime(DATUM_VAN.year, DATUM_VAN.month, DATUM_VAN.day),
                     "DatumTm":  datetime(DATUM_TOT.year, DATUM_TOT.month, DATUM_TOT.day),
                 }
             )
-            mutaties = []
-            if r["Mutaties"] and r["Mutaties"]["cMutatieList"]:
-                mutaties = r["Mutaties"]["cMutatieList"]
+            mutaties = (r["Mutaties"]["cMutatieList"]
+                        if r["Mutaties"] and r["Mutaties"]["cMutatieList"] else [])
             for m in mutaties:
-                regels = []
-                if m["MutatieRegels"] and m["MutatieRegels"]["cMutatieListRegel"]:
-                    regels = m["MutatieRegels"]["cMutatieListRegel"]
+                regels = (m["MutatieRegels"]["cMutatieListRegel"]
+                          if m["MutatieRegels"] and m["MutatieRegels"]["cMutatieListRegel"] else [])
                 tg_codes = set()
                 for rg in regels:
                     try: tg_codes.add(int(str(rg["TegenrekeningCode"] or "").strip()))
@@ -141,19 +141,24 @@ def load_data():
                     try:    gb = int(str(rg["TegenrekeningCode"] or "").strip())
                     except: gb = None
                     rows.append({
-                        "MutatieNr": _zget(m,"MutatieNr"), "Soort": str(_zget(m,"Soort") or ""),
-                        "Datum": _zget(m,"Datum"), "Omschrijving": str(_zget(m,"Omschrijving") or ""),
+                        "Soort": str(_zget(m,"Soort") or ""),
+                        "Datum": _zget(m,"Datum"),
+                        "Omschrijving": str(_zget(m,"Omschrijving") or ""),
                         "GrootboekCode": gb,
-                        "BedragExclBTW": float(_zget(rg,"BedragExclBTW") or 0), "Kant": "T",
+                        "BedragExclBTW": float(_zget(rg,"BedragExclBTW") or 0),
+                        "Kant": "T",
                     })
                 try:    rek = int(str(_zget(m,"Rekening") or "").strip())
                 except: rek = None
                 if rek in PL_CODES and rek not in tg_codes:
                     som = sum(float(_zget(rg,"BedragExclBTW") or 0) for rg in regels)
                     rows.append({
-                        "MutatieNr": _zget(m,"MutatieNr"), "Soort": str(_zget(m,"Soort") or ""),
-                        "Datum": _zget(m,"Datum"), "Omschrijving": str(_zget(m,"Omschrijving") or ""),
-                        "GrootboekCode": rek, "BedragExclBTW": -som, "Kant": "R",
+                        "Soort": str(_zget(m,"Soort") or ""),
+                        "Datum": _zget(m,"Datum"),
+                        "Omschrijving": str(_zget(m,"Omschrijving") or ""),
+                        "GrootboekCode": rek,
+                        "BedragExclBTW": -som,
+                        "Kant": "R",
                     })
             if len(mutaties) < 500: break
             nr_van = max(m["MutatieNr"] for m in mutaties) + 1
@@ -162,23 +167,9 @@ def load_data():
         except: pass
 
     df = pd.DataFrame(rows)
-    df["Datum"]  = pd.to_datetime(df["Datum"])
-    df["Jaar"]   = df["Datum"].dt.year
-    df["Maand"]  = df["Datum"].dt.month
-    df["RekeningNaam"] = df["GrootboekCode"].map(REKENING_NAMEN).fillna(df["GrootboekCode"].astype(str))
-
-    def cat(c):
-        if c in OMZET_RK:      return "Omzet"
-        if c in COS_RK:        return "Inkopen"
-        if c in MARKETING_RK:  return "Marketing"
-        if c in AFSCHR_RK:     return "Afschrijvingen"
-        if c in ONTWIKKEL_RK:  return "Ontwikkeling"
-        if c in REIS_RK:       return "Reis & Verblijf"
-        if c in KANTOOR_RK:    return "Kantoor & Algemeen"
-        if c in OVERIG_RK:     return "Overige kosten"
-        if c in FINANCIEEL_RK: return "Financieel"
-        return "Overig"
-    df["Categorie"] = df["GrootboekCode"].apply(lambda x: cat(x) if pd.notna(x) else "Onbekend")
+    df["Datum"] = pd.to_datetime(df["Datum"])
+    df["Jaar"]  = df["Datum"].dt.year.astype(int)
+    df["Maand"] = df["Datum"].dt.month.astype(int)
 
     NEGATE = {"GeldUitgegeven","FactuurOntvangen"}
     df["PLBedrag"] = df["BedragExclBTW"]
@@ -187,210 +178,214 @@ def load_data():
     return df
 
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
-def tot(df, jaar, codes):
-    sub = df[df["GrootboekCode"].isin(codes)]
-    if jaar != "Alle": sub = sub[sub["Jaar"] == jaar]
-    return sub["PLBedrag"].sum()
+def som(df, jaar, codes, maand=None):
+    s = df[df["GrootboekCode"].isin(codes) & (df["Jaar"] == int(jaar))]
+    if maand: s = s[s["Maand"] == int(maand)]
+    return s["PLBedrag"].sum()
 
-def eur(v, dash=True):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
-        return "—" if dash else ""
-    if round(v, 0) == 0: return "—" if dash else "–"
+def eur(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)): return "—"
+    if abs(v) < 0.50: return "—"
     s = "-" if v < 0 else ""
-    return f"{s}€ {abs(v):,.0f}".replace(",", ".")
+    return f"{s}€ {abs(v):,.0f}".replace(",", ".")
 
-def groei(v, vp):
-    if vp is None or vp == 0: return ""
+def pct(v):
+    return f"{v*100:.1f}%" if v is not None else "—"
+
+def groei_span(v, vp):
+    if not vp: return "&nbsp;"
     g = (v - vp) / abs(vp)
-    arrow, cls = ("▲","grow-pos") if g >= 0 else ("▼","grow-neg")
-    return f'<span class="{cls}">{arrow} {abs(g)*100:.1f}%</span>'
+    a, c = ("▲","grow-p") if g >= 0 else ("▼","grow-n")
+    return f'<span class="{c}">{a} {abs(g)*100:.1f}%</span>'
 
 # ─── SIDEBAR ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ♟️ Schaakopening")
+    st.markdown("## ♟️ Filters")
     st.markdown("---")
-    jaar_keuze = st.selectbox("Jaar (KPI's)", [2026, 2025, 2024])
-    opties_vgl = [j for j in [2025, 2024] if j != jaar_keuze]
-    vergelijk  = st.selectbox("Vergelijk met", opties_vgl + ["—"])
-    vergelijk  = None if vergelijk == "—" else int(vergelijk)
+    jaar = st.selectbox("Jaar", [2026, 2025, 2024], index=0)
+    vgl_opties = [j for j in [2025, 2024] if j != jaar]
+    vgl_raw = st.selectbox("Vergelijk met", ["— geen vergelijking"] + [str(j) for j in vgl_opties])
+    vgl = None if vgl_raw.startswith("—") else int(vgl_raw)
     st.markdown("---")
-    if st.button("🔄 Data vernieuwen"):
+    if st.button("🔄 Vernieuwen"):
         st.cache_data.clear(); st.rerun()
     st.caption(f"Vernieuwd: {datetime.now().strftime('%d %b %Y %H:%M')}")
-    st.caption("Automatisch elk uur.")
+    st.caption("Cache: 1 uur")
 
-# ─── DATA LADEN ──────────────────────────────────────────────────────────────
+# ─── DATA ────────────────────────────────────────────────────────────────────
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"❌ Verbindingsfout met e-Boekhouden: {e}")
-    st.stop()
+    st.error(f"❌ Verbindingsfout: {e}"); st.stop()
 
 # ─── HEADER ──────────────────────────────────────────────────────────────────
 st.markdown(
-    f"<h2 style='color:#1F3864;margin-bottom:2px'>♟️ &nbsp;Schaakopening Essenties</h2>"
-    f"<p style='color:#999;font-size:12px;margin-top:0'>Financial Dashboard &nbsp;|&nbsp; "
-    f"Bron: e-Boekhouden.nl</p>",
+    f"<div style='background:#1F3864;color:white;padding:14px 22px;border-radius:10px;"
+    f"margin-bottom:18px;display:flex;justify-content:space-between;align-items:center'>"
+    f"<div><span style='font-size:20px;font-weight:800'>♟️ &nbsp;Schaakopening Essenties</span>"
+    f"<span style='font-size:12px;color:#9DC3E6;margin-left:16px'>Executive Financial Dashboard</span></div>"
+    f"<div style='font-size:11px;color:#9DC3E6'>{jaar}"
+    f"{(' vs ' + str(vgl)) if vgl else ''} &nbsp;|&nbsp; "
+    f"{datetime.now().strftime('%d %b %Y')}</div></div>",
     unsafe_allow_html=True)
 
 # ─── KPI TILES ───────────────────────────────────────────────────────────────
-omzet = tot(df, jaar_keuze, OMZET_RK)
-ebit  = tot(df, jaar_keuze, EBIT_C)
-netto = tot(df, jaar_keuze, NETTO_C)
+omzet = som(df, jaar, OMZET_RK)
+ebit  = som(df, jaar, EBIT_C)
+netto = som(df, jaar, NETTO_C)
 nm    = netto / omzet if omzet else None
+omzet_v = som(df, vgl, OMZET_RK) if vgl else None
+ebit_v  = som(df, vgl, EBIT_C)   if vgl else None
+netto_v = som(df, vgl, NETTO_C)  if vgl else None
 
-omzet_v = tot(df, vergelijk, OMZET_RK) if vergelijk else None
-ebit_v  = tot(df, vergelijk, EBIT_C)   if vergelijk else None
-netto_v = tot(df, vergelijk, NETTO_C)  if vergelijk else None
-vl      = str(vergelijk) if vergelijk else ""
+def tile(label, v, vp, accent, is_pct=False):
+    val = pct(v) if is_pct else eur(v)
+    col = "#C00000" if (v is not None and v < 0) else "#1F3864"
+    sub = groei_span(v, vp) if vp is not None else "&nbsp;"
+    return (f'<div class="kpi" style="border-top:5px solid {accent}">'
+            f'<div class="kpi-lbl">{label}</div>'
+            f'<div class="kpi-val" style="color:{col}">{val}</div>'
+            f'<div class="kpi-sub">{sub}</div></div>')
 
-def kpi_tile(label, value, prev, color, suffix="", is_pct=False):
-    val_str = (f"{value*100:.1f}%" if is_pct and value is not None
-               else eur(value, dash=False))
-    neg   = value is not None and value < 0
-    vcol  = "#C00000" if neg else "#1F3864"
-    sub   = groei(value, prev) + (f"&nbsp;vs {vl}" if prev is not None else "")
-    return (f'<div class="kpi" style="border-top:5px solid {color}">'
-            f'<div class="kpi-label">{label}</div>'
-            f'<div class="kpi-value" style="color:{vcol}">{val_str}{suffix}</div>'
-            f'<div class="kpi-sub">{sub or "&nbsp;"}</div></div>')
-
-k1, k2, k3, k4 = st.columns(4)
-k1.markdown(kpi_tile("Omzet",          omzet, omzet_v, "#2E75B6"), unsafe_allow_html=True)
-k2.markdown(kpi_tile("EBIT",           ebit,  ebit_v,  "#1F3864"), unsafe_allow_html=True)
-k3.markdown(kpi_tile("Nettoresultaat", netto, netto_v,
-                     "#375623" if netto >= 0 else "#C00000"),       unsafe_allow_html=True)
-k4.markdown(kpi_tile("Nettomarge %",   nm,    None,    "#C55A11", is_pct=True), unsafe_allow_html=True)
+c1,c2,c3,c4 = st.columns(4)
+c1.markdown(tile("Omzet",          omzet, omzet_v, "#2E75B6"),               unsafe_allow_html=True)
+c2.markdown(tile("EBIT",           ebit,  ebit_v,  "#1F3864"),               unsafe_allow_html=True)
+c3.markdown(tile("Nettoresultaat", netto, netto_v,
+                 "#375623" if (netto or 0)>=0 else "#C00000"),                unsafe_allow_html=True)
+c4.markdown(tile("Nettomarge %",   nm,    None,    "#C55A11", is_pct=True),  unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ─── GRAFIEKEN ───────────────────────────────────────────────────────────────
 g1, g2 = st.columns(2)
-
-CHART_COLORS = {"2024": "#9DC3E6", "2025": "#2E75B6", "2026": "#1F3864"}
-CHART_LAYOUT = dict(
+CLR = {2024:"#9DC3E6", 2025:"#2E75B6", 2026:"#1F3864"}
+BASE_LAYOUT = dict(
     plot_bgcolor="white", paper_bgcolor="white", font_family="Arial",
-    margin=dict(t=40, b=20, l=10, r=10), height=320,
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
-    yaxis=dict(gridcolor="#EFEFEF", tickprefix="€ ", zeroline=True, zerolinecolor="#CCCCCC"),
+    margin=dict(t=36,b=20,l=10,r=10), height=300,
+    yaxis=dict(gridcolor="#EFEFEF", tickprefix="€ ", zeroline=True,
+               zerolinecolor="#CCCCCC", zerolinewidth=1),
     xaxis=dict(gridcolor="rgba(0,0,0,0)"),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
 )
 
-# Grafiek 1: Omzet per maand — lijnen per jaar
+# Grafiek 1: Omzet per maand — geselecteerd jaar als balken, vergelijking als lijn
 with g1:
     fig1 = go.Figure()
-    for jaar in [2024, 2025, 2026]:
-        y_vals = [
-            df[(df["Jaar"]==jaar) & (df["Maand"]==m) &
-               df["GrootboekCode"].isin(OMZET_RK)]["PLBedrag"].sum()
-            for m in range(1, 13)
-        ]
+    y_main = [som(df, jaar, OMZET_RK, m) for m in range(1,13)]
+    fig1.add_trace(go.Bar(
+        x=MND, y=y_main, name=str(jaar),
+        marker_color=CLR.get(jaar,"#2E75B6"),
+        hovertemplate="%{x}: €%{y:,.0f}<extra>" + str(jaar) + "</extra>",
+    ))
+    if vgl:
+        y_vgl = [som(df, vgl, OMZET_RK, m) for m in range(1,13)]
         fig1.add_trace(go.Scatter(
-            x=MAANDEN_NL, y=y_vals, name=str(jaar), mode="lines+markers",
-            line=dict(color=CHART_COLORS[str(jaar)], width=2.5),
-            marker=dict(size=6),
-            hovertemplate="%{x}: €%{y:,.0f}<extra>" + str(jaar) + "</extra>",
+            x=MND, y=y_vgl, name=str(vgl), mode="lines+markers",
+            line=dict(color=CLR.get(vgl,"#9DC3E6"), width=2, dash="dot"),
+            marker=dict(size=5),
+            hovertemplate="%{x}: €%{y:,.0f}<extra>" + str(vgl) + "</extra>",
         ))
-    fig1.update_layout(**CHART_LAYOUT, title=dict(
-        text="Omzet per Maand", font=dict(size=13, color="#1F3864"), x=0))
+    fig1.update_layout(**BASE_LAYOUT, title=dict(
+        text=f"Omzet per Maand — {jaar}" + (f" vs {vgl}" if vgl else ""),
+        font=dict(size=12, color="#1F3864"), x=0))
     st.plotly_chart(fig1, use_container_width=True)
 
-# Grafiek 2: OPEX per jaar — gestapelde balken
+# Grafiek 2: Operationele kosten per categorie — geselecteerd jaar (+ vergelijking indien actief)
 with g2:
     cost_cats = [
-        ("Marketing",       MARKETING_RK),
-        ("Kantoor & Alg.",  KANTOOR_RK),
-        ("Ontwikkeling",    ONTWIKKEL_RK),
-        ("Reis & Verblijf", REIS_RK),
-        ("Afschrijvingen",  AFSCHR_RK),
-        ("Overige kosten",  OVERIG_RK),
+        ("Marketing",      MARKETING_RK),
+        ("Kantoor & Alg.", KANTOOR_RK),
+        ("Ontwikkeling",   ONTWIKKEL_RK),
+        ("Reis & Verblijf",REIS_RK),
+        ("Afschrijvingen", AFSCHR_RK),
+        ("Overige kosten", OVERIG_RK),
     ]
-    cat_colors = ["#1F3864","#2E75B6","#4472C4","#5B9BD5","#9DC3E6","#D6E4F0"]
-    jaren_lbl  = ["2024","2025","2026"]
+    cat_clr = ["#1F3864","#2E75B6","#4472C4","#5B9BD5","#9DC3E6","#D6E4F0"]
+    jaren_show = [jaar] + ([vgl] if vgl else [])
 
     fig2 = go.Figure()
-    for (cat_name, codes), color in zip(cost_cats, cat_colors):
-        vals = [-tot(df, j, codes) for j in [2024, 2025, 2026]]
+    for (cat_name, codes), color in zip(cost_cats, cat_clr):
+        vals = [-som(df, j, codes) for j in jaren_show]
         vals = [v if v > 0 else 0 for v in vals]
         fig2.add_trace(go.Bar(
-            name=cat_name, x=jaren_lbl, y=vals,
+            name=cat_name, x=[str(j) for j in jaren_show], y=vals,
             marker_color=color, marker_line_color="white", marker_line_width=1,
             hovertemplate="%{x}: €%{y:,.0f}<extra>" + cat_name + "</extra>",
         ))
-    fig2.update_layout(**CHART_LAYOUT, barmode="stack", title=dict(
-        text="Operationele Kosten per Jaar", font=dict(size=13, color="#1F3864"), x=0))
+    fig2.update_layout(**BASE_LAYOUT, barmode="stack", title=dict(
+        text=f"Operationele Kosten — {jaar}" + (f" vs {vgl}" if vgl else ""),
+        font=dict(size=12, color="#1F3864"), x=0))
     st.plotly_chart(fig2, use_container_width=True)
 
-# ─── RESULTATENREKENING (HTML) ────────────────────────────────────────────────
+# ─── RESULTATENREKENING (maandelijks, HTML) ───────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
 
-def pl_row(label, codes, stijl="", indent=False):
-    vals = [tot(df, j, codes) for j in [2024, 2025, 2026]]
-    td_lbl = f'<td class="{"pl-ind" if indent else ""}">{label}</td>'
-    tds = ""
-    for v in vals:
-        neg_cls = ' class="pl-neg"' if v < -0.5 else ""
-        tds += f'<td style="text-align:right"{neg_cls}>{eur(v)}</td>'
-    return f'<tr class="{stijl}">{td_lbl}{tds}</tr>'
+jaren_toon = [jaar] + ([vgl] if vgl else [])
 
-def pl_sec_header(label):
-    return (f'<tr class="pl-sec"><td colspan="4" style="padding:8px 14px;'
-            f'font-size:11px;letter-spacing:.6px">{label}</td></tr>')
+def build_pl_table(df, jaren):
+    j1 = jaren[0]
+    j2 = jaren[1] if len(jaren) > 1 else None
+    toon_vgl = j2 is not None
 
-html = """
-<div style="background:white;border-radius:10px;padding:20px 24px;
-            box-shadow:0 2px 8px rgba(0,0,0,.09);overflow-x:auto">
-<table class="pl-table">
-<thead>
-  <tr>
-    <th style="text-align:left;width:44%">Resultatenrekening</th>
-    <th>2024</th><th>2025</th><th>2026 YTD</th>
-  </tr>
-</thead>
-<tbody>
-"""
-html += pl_sec_header("OMZET")
-html += pl_row("Omzet premium",          [8000])
-html += pl_row("Omzet losse producten",   [8010])
-html += pl_row("Omzet hostingbijdragen",  [8020])
-html += pl_row("TOTAAL OMZET",           OMZET_RK,           stijl="pl-sub")
+    # header
+    th_lbl = '<th class="lbl">Resultatenrekening</th>'
+    th_mnd = "".join(f'<th>{m}</th>' for m in MND)
+    th_tot = f'<th style="background:#2E75B6">Totaal {j1}</th>'
+    th_vgl = (f'<th style="background:#4A4A4A">Totaal {j2}</th>'
+              f'<th style="background:#4A4A4A">YoY%</th>') if toon_vgl else ""
+    header = f'<tr>{th_lbl}{th_mnd}{th_tot}{th_vgl}</tr>'
 
-html += pl_sec_header("KOSTPRIJS VAN DE OMZET")
-html += pl_row("Inkopen",                COS_RK)
-html += pl_row("BRUTOWINST",             OMZET_RK + COS_RK,  stijl="pl-sub")
+    def row(label, codes, stijl="", lbl_class="lbl"):
+        vals_m = [som(df, j1, codes, m) for m in range(1,13)]
+        totaal = sum(vals_m)
+        tds_m  = "".join(
+            f'<td class="{"neg" if v<-0.5 else ""}">{eur(v) if abs(v)>0.5 else "—"}</td>'
+            for v in vals_m)
+        neg_t  = "neg" if totaal < -0.5 else ""
+        td_tot = f'<td class="{neg_t}" style="font-weight:700">{eur(totaal)}</td>'
+        if toon_vgl:
+            tot2   = som(df, j2, codes)
+            neg_v  = "neg" if tot2 < -0.5 else ""
+            g = ((totaal-tot2)/abs(tot2)*100) if tot2 else None
+            g_str = (f'<span class="{"grow-p" if g>=0 else "grow-n"}">'
+                     f'{"▲" if g>=0 else "▼"}{abs(g):.1f}%</span>') if g is not None else "—"
+            td_vgl = (f'<td class="{neg_v}">{eur(tot2)}</td>'
+                      f'<td style="text-align:center">{g_str}</td>')
+        else:
+            td_vgl = ""
+        return f'<tr class="{stijl}"><td class="{lbl_class}">{label}</td>{tds_m}{td_tot}{td_vgl}</tr>'
 
-html += pl_sec_header("OPERATIONELE KOSTEN")
-html += pl_row("Marketing",              MARKETING_RK,        indent=True)
-html += pl_row("Kantoor & Algemeen",     KANTOOR_RK,          indent=True)
-html += pl_row("Ontwikkeling",           ONTWIKKEL_RK,        indent=True)
-html += pl_row("Reis & Verblijf",        REIS_RK,             indent=True)
-html += pl_row("Afschrijvingen",         AFSCHR_RK,           indent=True)
-html += pl_row("Overige kosten",         OVERIG_RK,           indent=True)
-html += pl_row("TOTAAL OPEX",            OPEX_C,              stijl="pl-sub")
+    def sec(label):
+        colspan = 14 + (2 if toon_vgl else 0)
+        return (f'<tr class="sec"><td colspan="{colspan}" '
+                f'style="padding:7px 10px;font-size:11px;letter-spacing:.5px">'
+                f'{label}</td></tr>')
 
-html += pl_row("EBIT",                   EBIT_C,              stijl="pl-sub")
+    rows = header
+    rows += sec("OMZET")
+    rows += row("Omzet premium",          [8000], lbl_class="ind")
+    rows += row("Omzet losse producten",   [8010], lbl_class="ind")
+    rows += row("Omzet hostingbijdragen",  [8020], lbl_class="ind")
+    rows += row("TOTAAL OMZET",           OMZET_RK, stijl="sub")
 
-html += pl_sec_header("FINANCIEEL")
-html += pl_row("Rente spaarrekening",    FINANCIEEL_RK)
+    rows += sec("OPERATIONELE KOSTEN")
+    rows += row("Marketing",              MARKETING_RK,  lbl_class="ind")
+    rows += row("Kantoor & Algemeen",     KANTOOR_RK,    lbl_class="ind")
+    rows += row("Ontwikkeling",           ONTWIKKEL_RK,  lbl_class="ind")
+    rows += row("Reis & Verblijf",        REIS_RK,       lbl_class="ind")
+    rows += row("Afschrijvingen",         AFSCHR_RK,     lbl_class="ind")
+    rows += row("Overige kosten",         OVERIG_RK,     lbl_class="ind")
+    rows += row("TOTAAL OPEX",            OPEX_C,        stijl="sub")
 
-html += pl_row("NETTORESULTAAT",         NETTO_C,             stijl="pl-tot")
+    rows += row("EBIT",                   EBIT_C,        stijl="sub")
 
-html += "</tbody></table></div>"
-st.markdown(html, unsafe_allow_html=True)
+    rows += sec("FINANCIEEL")
+    rows += row("Rente spaarrekening",    FINANCIEEL_RK, lbl_class="ind")
 
-# ─── DETAIL BOEKINGEN ────────────────────────────────────────────────────────
-st.markdown("<br>", unsafe_allow_html=True)
-with st.expander("📋 Boekingsdetail"):
-    c1, c2 = st.columns(2)
-    jaren_f = c1.multiselect("Jaar",      [2024,2025,2026], default=[jaar_keuze])
-    cat_f   = c2.multiselect("Categorie", sorted(df["Categorie"].unique()),
-                              default=sorted(df["Categorie"].unique()))
-    detail = df[df["Jaar"].isin(jaren_f) & df["Categorie"].isin(cat_f) &
-                df["GrootboekCode"].isin(PL_CODES)].copy()
-    detail["Datum"]    = detail["Datum"].dt.strftime("%d-%m-%Y")
-    detail["PLBedrag"] = detail["PLBedrag"].round(2)
-    st.dataframe(
-        detail[["Datum","Soort","GrootboekCode","RekeningNaam",
-                "Categorie","Omschrijving","PLBedrag"]],
-        use_container_width=True, height=300)
-    st.caption(f"{len(detail):,} boekingen")
+    rows += row("NETTORESULTAAT",         NETTO_C,       stijl="tot")
+
+    return f'<div class="pl-wrap"><table class="pl"><thead>{header}</thead><tbody>{rows}</tbody></table></div>'
+
+st.markdown(build_pl_table(df, jaren_toon), unsafe_allow_html=True)
+
+# ─── DETAIL ─────────────────────────────────────
