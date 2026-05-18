@@ -1,0 +1,6 @@
+streamlit
+zeep
+pandas
+plotly
+lxml
+requests
